@@ -3,10 +3,12 @@ import cv2
 import random
 import matplotlib.pyplot as plt
 import numpy as np
+import json
 from mmdet_model import mmdet
 from dataloaders import LoadImagesFromFolder, read_names_file
 from points import xyz
-import json
+from traffic_color import signal
+
 
 
 # fig, axes = plt.subplots(1, 2, figsize=(12, 6))
@@ -27,7 +29,7 @@ import json
 
 # implementing midas
 
-img_indx = -1
+img_indx = 23
 
 images = LoadImagesFromFolder("scene4/front_frames/")
 depth_images = midas("DPT_Large", [images[img_indx]])
@@ -55,7 +57,7 @@ R = np.array([[-1, 0, 0, 0],
 
 labels = read_names_file("coco.names")
 
-bounding_boxes = mmdet([images[-1]])
+bounding_boxes = mmdet([images[img_indx]])
 
 pred_scores = bounding_boxes[0]['predictions'][0]['scores']
 pred_labels = bounding_boxes[0]['predictions'][0]['labels']
@@ -64,16 +66,17 @@ pred_bound_boxes = bounding_boxes[0]['predictions'][0]['bboxes']
 json_dict = {}
 
 for index,score in enumerate(pred_scores):
-    if score > 0.8:
+    if score > 0.33:
         label_ind = pred_labels[index]
         label = labels[label_ind]
         box = pred_bound_boxes[index]
-        if label == 'car' or label == 'truck' or label == 'bus' or label == 'motorcycle' or label == 'bicycle' or label == 'person' or label == 'traffic light' or label == 'stop sign':
+        if label == 'car' or label == 'truck' or label == 'bus' or label == 'motorcycle' or label == 'bicycle' or label == 'person'  or label == 'stop sign':
             u,v = (box[0]+box[2])/2, (box[1]+box[3])/2
-            depth = depth_img[int(v)][int(u)]
+            depth = depth_img[int(u)][int(v)]
             XYZ = xyz(R, k, (u,v), depth)
             T = np.eye(4)
-            T[:,3] = XYZ
+            T[:3,3] = XYZ
+            T = T.tolist()
             if label in json_dict:
                 # If the key exists, append the value to the existing list
                 json_dict[label].append(T)
@@ -81,8 +84,24 @@ for index,score in enumerate(pred_scores):
                 # If the key doesn't exist, create a new key-value pair with a list containing the value
                 json_dict[label] = [T]
                 
+        if label == 'traffic light':
+            u,v = (box[0]+box[2])/2, (box[1]+box[3])/2
+            depth = depth_img[int(u)][int(v)]
+            XYZ = xyz(R, k, (u,v), depth)
+            T = np.eye(4)
+            T[:3,3] = XYZ
+            T = T.tolist()
+            color = signal(images[img_indx], box)
+            value = [T, color]
+            if label in json_dict:
+                # If the key exists, append the value to the existing list
+                json_dict[label].append(value)
+            else:
+                # If the key doesn't exist, create a new key-value pair with a list containing the value
+                json_dict[label] = [value]
                 
-json_filename = "json_output.json"
+                
+json_filename = f"json_output{img_indx}.json"
 with open(json_filename, "w") as json_file:
     json.dump(json_dict, json_file)
             
