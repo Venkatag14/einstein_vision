@@ -47,7 +47,7 @@ python wrapper.py
 *object detection using MMDet*
 
 
-![Image 3](output.png)
+![Image 3](outputs/output.png)
 
 *Einstein Vision*
     
